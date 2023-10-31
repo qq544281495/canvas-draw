@@ -16,13 +16,21 @@
     <div class="box-row">
       <label for="selectColor" class="control-row">
         <span>画笔颜色：</span>
-        <input
+        <div
+          v-for="(item, key) of colorList"
+          :key="key"
+          class="color-item"
+          :style="{ backgroundColor: item }"
+          :class="selectedColor === item ? 'active' : ''"
+          @click="changeSelectColor(item)"
+        ></div>
+        <!-- <input
           id="selectColor"
           type="color"
           value="#000000"
           v-model="selectedColor"
           class="color"
-        />
+        /> -->
       </label>
     </div>
     <div class="box-row">
@@ -34,7 +42,7 @@
           class="range"
           v-model="lineWidth"
           min="1"
-          max="10"
+          max="4"
           value="1"
         />
       </label>
@@ -60,11 +68,20 @@ export default {
     return {
       ctx: null,
       drawing: false,
-      selectedColor: "#000000",
+      selectedColor: "#ffffff",
       lineWidth: 1,
       show: false,
       message: "",
       timer: null,
+      colorList: [
+        "#ffffff",
+        "#f5487f",
+        "#ffa822",
+        "#134e6f",
+        "#ff6150",
+        "#1ac0c6",
+        "#272643",
+      ],
     };
   },
   mounted() {
@@ -104,6 +121,9 @@ export default {
       // // 创建图片提交表单
       // let formData = new FormData();
       // formData.append("image", file);
+    },
+    changeSelectColor(index) {
+      this.selectedColor = index;
     },
     changeShow(value) {
       this.show = value;
@@ -213,6 +233,19 @@ canvas {
   background: #fafafa;
   border: 1px solid #ddd;
   border-radius: 4px;
+}
+
+.color-item {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid #ddd;
+}
+
+.active {
+  border: 1px solid #0075ff;
 }
 
 button {
