@@ -8,10 +8,10 @@
           type="file"
           accept="image/*"
           @change="uploadImage"
-        />绘制图片
+        />上传图片
       </a>
       <button @click="clearCanvas">清除画布</button>
-      <button @click="uploadDrawImage">上传图片</button>
+      <button @click="uploadDrawImage">绘制图片</button>
     </div>
     <div class="box-row">
       <label for="selectColor" class="control-row">
@@ -64,6 +64,7 @@ export default {
       lineWidth: 1,
       show: false,
       message: "",
+      timer: null,
     };
   },
   mounted() {
@@ -90,11 +91,19 @@ export default {
       reader.readAsDataURL(file);
     },
     uploadDrawImage() {
-      const file = this.getDrawImage();
-      console.log(file);
-      // 创建图片提交表单
-      let formData = new FormData();
-      formData.append("image", file);
+      if (this.timer) clearTimeout(this.timer);
+      this.timer = setTimeout(() => {
+        let dataUrl = this.$refs.canvas.toDataURL("image/png");
+        let link = document.createElement("a");
+        link.href = dataUrl;
+        link.download = "draw_image.png";
+        link.click();
+      }, 500);
+      // const file = this.getDrawImage();
+      // console.log(file);
+      // // 创建图片提交表单
+      // let formData = new FormData();
+      // formData.append("image", file);
     },
     changeShow(value) {
       this.show = value;
