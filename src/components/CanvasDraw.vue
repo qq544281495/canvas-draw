@@ -53,16 +53,24 @@
         />
       </div>
     </div>
-    <canvas
-      width="600px"
-      height="300px"
-      ref="canvas"
-      @mousedown="startDrawing"
-      @mousemove="draw"
-      @mouseup="stopDrawing"
-      @mouseleave="leaveDrawing"
-      :class="selectedModel === 'color' ? 'brush' : 'erasure'"
-    ></canvas>
+    <div class="draw-container">
+      <canvas
+        width="600px"
+        height="300px"
+        ref="bgCanvas"
+        class="bg-canvas"
+      ></canvas>
+      <canvas
+        width="600px"
+        height="300px"
+        ref="canvas"
+        @mousedown="startDrawing"
+        @mousemove="draw"
+        @mouseup="stopDrawing"
+        @mouseleave="leaveDrawing"
+        :class="selectedModel === 'color' ? 'brush' : 'erasure'"
+      ></canvas>
+    </div>
     <ErrorInfo :show="show" :message="message" @changeShow="changeShow" />
   </div>
 </template>
@@ -83,6 +91,8 @@ export default {
       timer: null,
       history: [],
       future: [],
+      bgHistory: [],
+      bgFuture: [],
       colorList: [
         "#ffffff",
         "#f5487f",
@@ -96,8 +106,10 @@ export default {
   },
   mounted() {
     this.ctx = this.$refs.canvas.getContext("2d");
+    this.bgCtx = this.$refs.bgCanvas.getContext("2d");
     // 初始化当前状态
     this.saveState();
+    this.saveBgState();
   },
   methods: {
     // 上传图片作为绘制背景
@@ -114,7 +126,11 @@ export default {
         img.onload = () => {
           this.$refs.canvas.width = img.width;
           this.$refs.canvas.height = img.height;
-          this.ctx.drawImage(img, 0, 0, img.width, img.height);
+          this.$refs.bgCanvas.width = img.width;
+          this.$refs.bgCanvas.height = img.height;
+          this.bgCtx.drawImage(img, 0, 0, img.width, img.height);
+          this.saveState();
+          this.saveBgState();
         };
         img.src = e.target.result;
       };
@@ -124,7 +140,15 @@ export default {
     uploadDrawImage() {
       if (this.timer) clearTimeout(this.timer);
       this.timer = setTimeout(() => {
-        let dataUrl = this.$refs.canvas.toDataURL("image/png");
+        // 创建新的canvas合并背景层&绘制层
+        let newCanvas = document.createElement("canvas");
+        newCanvas.width = this.$refs.canvas.width;
+        newCanvas.height = this.$refs.canvas.height;
+        let newCtx = newCanvas.getContext("2d");
+        // 注：先绘制背景层，再绘制画布层
+        newCtx.drawImage(this.$refs.bgCanvas, 0, 0);
+        newCtx.drawImage(this.$refs.canvas, 0, 0);
+        let dataUrl = newCanvas.toDataURL("image/png");
         let link = document.createElement("a");
         link.href = dataUrl;
         link.download = "draw_image.png";
@@ -161,8 +185,8 @@ export default {
         this.ctx.globalCompositeOperation = "destination-out";
         this.ctx.lineWidth = 20;
       }
-      const x = event.clientX - this.$refs.canvas.offsetLeft;
-      const y = event.clientY - this.$refs.canvas.offsetTop;
+      const x = event.offsetX;
+      const y = event.offsetY;
       this.ctx.lineTo(x, y);
       this.ctx.stroke();
       this.ctx.beginPath();
@@ -174,6 +198,7 @@ export default {
       this.ctx.beginPath();
       // 停止绘制记录状态
       this.saveState();
+      this.saveBgState();
     },
     // 离开画板
     leaveDrawing() {
@@ -185,32 +210,56 @@ export default {
       const dataURL = this.$refs.canvas.toDataURL();
       this.history.push(dataURL);
     },
+    // 记录背景绘制状态
+    saveBgState() {
+      const dataURL = this.$refs.bgCanvas.toDataURL();
+      this.bgHistory.push(dataURL);
+    },
     // 上一步
     back() {
-      if (this.history.length <= 1) return;
-      const lastState = this.history[this.history.length - 1];
-      this.history.pop();
-      const prevState = this.history[this.history.length - 1];
+      // 重新绘制背景层&绘画层
+      this.backCanvas(this.ctx, this.$refs.canvas, this.history, this.future);
+      this.backCanvas(
+        this.bgCtx,
+        this.$refs.bgCanvas,
+        this.bgHistory,
+        this.bgFuture
+      );
+    },
+    backCanvas(ctx, canvas, history, future) {
+      if (history.length <= 1) return;
+      const lastState = history[history.length - 1];
+      history.pop();
+      const prevState = history[history.length - 1];
       const img = new Image();
       img.onload = () => {
-        this.$refs.canvas.width = img.width;
-        this.$refs.canvas.height = img.height;
-        this.ctx.drawImage(img, 0, 0, img.width, img.height);
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0, img.width, img.height);
       };
       img.src = prevState;
-      this.future.unshift(lastState);
+      future.unshift(lastState);
     },
     // 下一步
     next() {
-      if (this.future.length === 0) return; // 没有更多的状态可供重做
-      const nextState = this.future[0]; // 获取下一个状态
-      this.future.shift(); // 删除当前状态
-      this.history.push(nextState); // 将下一个状态添加到历史记录中
+      this.nextCanvas(this.ctx, this.$refs.canvas, this.history, this.future);
+      this.nextCanvas(
+        this.bgCtx,
+        this.$refs.bgCanvas,
+        this.bgHistory,
+        this.bgFuture
+      );
+    },
+    nextCanvas(ctx, canvas, history, future) {
+      if (future.length === 0) return; // 没有更多的状态可供重做
+      const nextState = future[0]; // 获取下一个状态
+      future.shift(); // 删除当前状态
+      history.push(nextState); // 将下一个状态添加到历史记录中
       const img = new Image();
       img.onload = () => {
-        this.$refs.canvas.width = img.width;
-        this.$refs.canvas.height = img.height;
-        this.ctx.drawImage(img, 0, 0, img.width, img.height);
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0, img.width, img.height);
       };
       img.src = nextState;
     },
@@ -311,6 +360,13 @@ canvas {
   cursor: pointer;
 }
 
+.bg-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+}
+
 .color {
   height: 30px;
   background: #fafafa;
@@ -345,6 +401,10 @@ button {
 
 button[disabled] {
   color: #a8abb2;
+}
+
+.draw-container {
+  position: relative;
 }
 
 .control-row {
